@@ -24,7 +24,7 @@ int main(int argc, char** argv){
 	//// SET UP
 
 	// Set up defaults
-	int port = 69;
+	int port = 6969;
 	Cache::size_type maxmem = 100;
 	int threads = 1;
 	auto server = HTTP();
@@ -77,25 +77,63 @@ int main(int argc, char** argv){
 	boost::asio::io_context ioc;
 	tcp::resolver resolver{ioc};
 	tcp::socket socket{ioc};
+	
+	http::request<Body,http::basic_fields<Allocator>>&& req;
+	Send&& send;
 
 	// Make connection
 	//server::http:
 	
 	// Server loop
 	//while(True){
+		
+		//requests passed as req.x()
+
+		//Check if any of the available methods are found in request
+		if(req.method() != http::verb::get &&
+		   req.method() != http::verb::head &&
+		   req.method() != http::verb::put &&
+		   req.method() != http::verb::del &&
+		   req.method() != http::verb::post){
+		return send(bad_request("Unknown HTTP-method"));}
+
 
 		//handle get
+		if(req.method() == http::verb::get) {
 
+		}
 		//handle put
+		if(req.method() == http::verb::put) {
+
+		}
 
 		//handle delete
+		if(req.method() == http::verb::del) {
+
+		}
 
 		//handle head
+		if(req.method() == http::verb::head) {
+
+		}
 
 		//handle post
+		if(req.method() == http::verb::post) {
+
+		}
 
 		//handle errors
 		//err codes: 3xx/5xx
+		//from : https://www.boost.org/doc/libs/develop/libs/beast/example/http/server/async/http_server_async.cpp
+		//{
+			http::response<http::string_body> res{http::status::internal_server_error, req.version()};
+			res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+			res.set(http::field::content_type, "text/html");
+			res.keep_alive(req.keep_alive());
+			res.body() = "An error occurred: '" + std::string(what) + "'";
+			res.prepare_payload();
+			//return res;
+		//};
 
 		//end condition
 			//break;
