@@ -7,6 +7,9 @@ Ian Jackson, Arthur Lawson
 
 ## Part 2
 
+TODO: change del and reset(?) methods from old evictor.hh
+      make all Cache* params into std::shared_ptr<Cache>
+
 ## Bugs, Leaks, and Warnings!
 
 ## Contributions / Sources

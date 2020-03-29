@@ -35,7 +35,7 @@ void
 handle_request(
     Cache* cache_,
     http::request<Body, http::basic_fields<Allocator>>&& req,
-    Send&& send)
+    Send&& send) //Check slack for eitan advice.
 {
     // Returns a bad request response
     auto const bad_request =
@@ -91,9 +91,12 @@ handle_request(
         return send(server_error(ec.message()));
 
     //handle put
+	std::string key = "Gree";
+	Cache::val_type value = "R";
     if(req.method() == http::verb::put) {
-        //cache->set(key,value); //create or replace k,v pair in cache
-        //assert(cache->get(key) == value); //check that this worked properly
+	Cache::size_type sz = 1;
+        cache_->set(key,value,sz); //create or replace k,v pair in cache
+        assert(cache_->get(key, sz) == value); //check that this worked properly
 	std::cout << "Made it here!" << std::endl;
     }
 
@@ -415,7 +418,7 @@ private:
 
 
 // MAIN
-int main(int argc, char** argv){
+int main(int argc, const char* argv[]){
 
 	//// SET UP
 
@@ -428,14 +431,16 @@ int main(int argc, char** argv){
 	// Set up args options for help menu
 	parse_cmd::options_description options("Input Options");
 	options.add_options()
-		("-m maxmem", parse_cmd::value<Cache::size_type>(), "maximum memory for Cache object (default = 100)")
-		("-s server", parse_cmd::value<int>(),"address of server (default = 127.0.0.1)")
-		("-p port", parse_cmd::value<int>(),"which TCP port to connect to (default = 69)")
-		("-t threads", parse_cmd::value<int>(), "how many threads to use (default = 1)")
-		("help", "show help options");
+		("help", "show help options")
+		("m maxmem", parse_cmd::value<Cache::size_type>(&maxmem), "maximum memory for Cache object (default = 100)")
+		("s server", parse_cmd::value<std::string>(&address),"address of server (default = 127.0.0.1)")
+		("p port", parse_cmd::value<unsigned short>(&port),"which TCP port to connect to (default = 6969)")
+		("t threads", parse_cmd::value<int>(&threads), "how many threads to use (default = 1)")
+	;
+
 
 	// Set up args obtained from command line in variable map
-	parse_cmd::variables_map vm;	
+	parse_cmd::variables_map vm{};	
 	parse_cmd::store(parse_cmd::parse_command_line(argc,argv,options), vm);
 	parse_cmd::notify(vm);
 
@@ -445,21 +450,23 @@ int main(int argc, char** argv){
 		return 0;
 	}
 
-	if (vm.count("-m")) {
-		maxmem = vm["-m"].as<Cache::size_type>();
+	if (vm.count("m")) {
+		std::cout << "MAXMEM IS " << maxmem << std::endl;
+		//maxmem = vm["m"].as<Cache::size_type>();
+		std::cout << "Made it here!" << std::endl;
 	}
 
-	if (vm.count("-s")) {
-		address = vm["-s"].as<std::string>();
+	if (vm.count("s")) {
+		//address = vm["s"].as<std::string>();
 	}
 
 
-	if (vm.count("-p")) {
-		port = vm["-p"].as<unsigned short>();
+	if (vm.count("p")) {
+		//port = vm["p"].as<unsigned short>();
 	}
 
-	if (vm.count("-t")) {
-		threads = vm["-t"].as<int>();
+	if (vm.count("t")) {
+		//threads = vm["t"].as<int>();
 	}
 
 	// Set up cache
@@ -479,6 +486,8 @@ int main(int argc, char** argv){
 		ioc,
 		tcp::endpoint{ip_address, port}
 	)->run();
+
+	std::cout << "OUT"<< std::endl;
     
 	// Run the I/O service on one thread
 	ioc.run();
