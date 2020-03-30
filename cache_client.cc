@@ -146,9 +146,9 @@ public:
 		// If we get here then the connection is closed gracefully
 	    	//return EXIT_SUCCESS;
 
-
+    }
      // Delete an object from the cache, if it's still there
-     bool del(key_type key) {
+     bool  del(key_type key) {
 
 
 		// Set up an HTTP DELETE_ request message
@@ -184,6 +184,38 @@ public:
 
      // Compute the total amount of memory used up by all cache values (not keys)
      size_type space_used() const {
+        // Set up an HTTP head request message
+
+
+        //might wanna double check This                                   ~Arthur
+        http::request<http::string_body> req{http::verb::head, target, version};
+        req.set(http::field::host, host);
+        req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+
+        // Send the HTTP request to the remote host
+        http::write(stream, req);
+
+        // This buffer is used for reading and must be persisted
+        beast::flat_buffer buffer;
+
+        // Declare a container to hold the response
+        http::response<http::dynamic_body> res;
+
+        // Receive the HTTP response
+        http::read(stream, buffer, res);
+
+        // Write the message to standard out, this should be the value of key
+        // and the size of the value
+        std::cout << res << std::endl;
+
+        // Gracefully close the socket
+        //beast::error_code ec;
+        //stream.socket().shutdown(tcp::socket::shutdown_both, ec);
+
+        // If we get here then the connection is closed gracefully
+            //return EXIT_SUCCESS;
+
+
 
      }
 
@@ -192,6 +224,7 @@ public:
 
 
 		// Set up an HTTP RESET request message
+        //shouldn't http verb be post for reset? Instructions said that post should be only for reset ~ Arthur
 		http::request<http::string_body> req{http::verb::put, target, version};
 		req.set(http::field::host, host);
 		req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
