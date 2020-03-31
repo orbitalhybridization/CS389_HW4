@@ -16,6 +16,7 @@
 #include <boost/program_options.hpp>
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/value_semantic.hpp>
+#include <boost/algorithm/string.hpp>
 
 // Use boost to parse command line and beast for server
 namespace parse_cmd = boost::program_options;
@@ -83,21 +84,42 @@ handle_request(
        req.method() != http::verb::put &&
        req.method() != http::verb::delete_ &&
        req.method() != http::verb::post){
-       return send(bad_request("Unknown HTTP-method"));}
+       return send(bad_request("Unknown HTTP-method \n"));}
 
     // Handle an unknown error
     beast::error_code ec;
     if(ec)
         return send(server_error(ec.message()));
 
-    //handle put
-	std::string key = "Gree";
-	Cache::val_type value = "R";
+    // Handle PUT request
     if(req.method() == http::verb::put) {
-	Cache::size_type sz = 1;
+
+	// Handle a put request without key/value pair
+	if (req.target().empty()) {
+		return send(bad_request("PUT target not found, requires key/value pair '/k/v'"));
+	}
+
+    	if(ec) // handle error >_<
+        	return send(server_error(ec.message()));
+
+	// Parse request target
+	std::vector<std::string> req_pair;
+	boost::split(req_pair,req.target(),'/');
+	std::string key = req_pair[0];
+	char cstr[req_pair[1].size() + 1];
+	strcpy(cstr, req_pair[1].c_str());
+	Cache::val_type value = cstr;
+	
+	// Add requested key/value pair to cache
+	Cache::size_type sz;
         cache_->set(key,value,sz); //create or replace k,v pair in cache
         assert(cache_->get(key, sz) == value); //check that this worked properly
-	std::cout << "Made it here!" << std::endl;
+
+	// Build response and send!
+        http::response<http::string_body> res{http::status::ok,req.version()};
+	res.body() = "Key " + key + " and value " + value + " set in cache!";
+	return send(std::move(res));
+
     }
 
 		/*
@@ -431,16 +453,16 @@ int main(int argc, const char* argv[]){
 	// Set up args options for help menu
 	parse_cmd::options_description options("Input Options");
 	options.add_options()
-		("help", "show help options")
-		("m maxmem", parse_cmd::value<Cache::size_type>(&maxmem), "maximum memory for Cache object (default = 100)")
-		("s server", parse_cmd::value<std::string>(&address),"address of server (default = 127.0.0.1)")
-		("p port", parse_cmd::value<unsigned short>(&port),"which TCP port to connect to (default = 6969)")
-		("t threads", parse_cmd::value<int>(&threads), "how many threads to use (default = 1)")
+		("help", "show usage options")
+		("m", parse_cmd::value(&maxmem), "maximum memory for Cache object (default = 100)")
+		("s", parse_cmd::value(&address),"address of server (default = 127.0.0.1)")
+		("p", parse_cmd::value(&port),"which TCP port to connect to (default = 6969)")
+		("t threads", parse_cmd::value(&threads), "how many threads to use (default = 1)")
 	;
 
 
 	// Set up args obtained from command line in variable map
-	parse_cmd::variables_map vm{};	
+	parse_cmd::variables_map vm;	
 	parse_cmd::store(parse_cmd::parse_command_line(argc,argv,options), vm);
 	parse_cmd::notify(vm);
 
@@ -451,22 +473,20 @@ int main(int argc, const char* argv[]){
 	}
 
 	if (vm.count("m")) {
-		std::cout << "MAXMEM IS " << maxmem << std::endl;
-		//maxmem = vm["m"].as<Cache::size_type>();
-		std::cout << "Made it here!" << std::endl;
+		std::cout << "Maxmem set to " + maxmem << std::endl;
 	}
 
 	if (vm.count("s")) {
-		//address = vm["s"].as<std::string>();
+		std::cout << "Server set to " + address << std::endl;
 	}
 
 
 	if (vm.count("p")) {
-		//port = vm["p"].as<unsigned short>();
+		std::cout << "Port set to " + port << std::endl;
 	}
 
 	if (vm.count("t")) {
-		//threads = vm["t"].as<int>();
+		std::cout << "Threads set to " + threads << std::endl;
 	}
 
 	// Set up cache
@@ -487,7 +507,7 @@ int main(int argc, const char* argv[]){
 		tcp::endpoint{ip_address, port}
 	)->run();
 
-	std::cout << "OUT"<< std::endl;
+	std::cout << "Server Up and Running..."<< std::endl;
     
 	// Run the I/O service on one thread
 	ioc.run();
