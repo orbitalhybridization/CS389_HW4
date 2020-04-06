@@ -16,8 +16,10 @@ public:
         Evictor* evictor = nullptr,
         hash_func hasher = std::hash<key_type>()) : max(maxmem),
         max_load_factor(max_load_factor), evictor(evictor), hasher(hasher)
-        {storage = std::unordered_map<key_type, std::pair<val_type, size_type>, hash_func> (1, hasher);}
+        {storage = std::unordered_map<key_type, std::pair<Cache::val_type, size_type>, hash_func> (1, hasher);}
         
+
+    Impl(){};
 
     //maybe pass it the type
     /*
@@ -37,16 +39,28 @@ public:
     ~Impl() = default;
 
     void set(key_type key, val_type val, size_type size){
+    
+    byte_type *value_deepcopy = new byte_type[size]; //LEEKS
+    int j =0;
+	while (val[j] != '\0')
+		{
+			value_deepcopy[j] = val[j];
+			j++;
+		}
     if (size > max) {return;}
     if (evictor) {
     evictor-> touch_key(key);
     }
-	if (tracker + size > max){
-        if (evictor) {
+	while (tracker + size > max){
+        if (evictor) { 
         auto temp = evictor -> evict();
-        //std::cout<<temp<< "last"<< std::endl;
+
         this -> del(temp);
         }
+	else {
+		delete[] value_deepcopy; //delete pointer created
+		break;
+	}
         } // if we're going over the max, call evictor based on fifo protocol
 	
      //otherwise store value in cache
@@ -58,10 +72,10 @@ public:
         size_type difference = (size - storage[key].second);
         storage[key].second += difference;
         tracker+=difference;
-        storage[key].first = val;
+        storage[key].first = value_deepcopy;
     }
     else{
-	storage.insert(std::make_pair(key,std::make_pair(val,size))); //store value paired with its size
+	storage.insert(std::make_pair(key,std::make_pair(value_deepcopy,size))); //store value paired with its size
 	tracker += size;
     }
     
@@ -78,15 +92,15 @@ public:
         evictor -> touch_key(key);
         }
 	    val_type ret = storage[key].first;
-        std::cout<<storage[key].second<< std::endl;
-        val_size = storage[key].second;
-		//std::cout<< storage[key] << std::endl;
+            val_size = storage[key].second;
+
 	    return ret; // returns value
 
   	}
 
-  	    else {
-            val_type ret = "";
+  	else {
+           
+	    val_type ret = nullptr;
             return ret;
         }
       }
@@ -94,8 +108,11 @@ public:
      // Delete an object from the cache, if it's still there
      bool del(key_type key) {
 	if (storage.find(key) != storage.end()) {
+
+		delete[] storage[key].first;   //delete the pointer to value
 		tracker -= storage[key].second; //decrement tracker by size of val
-		storage.erase(storage.find(key)); //find and erase value
+		storage.erase(storage.find(key)); //find and erase value/size pair
+
 		return true;
         if (evictor){evictor -> del(key);}
 	}
@@ -109,8 +126,13 @@ public:
 
      // Delete all data from the cache
      void reset(){
-	storage.clear();
+	auto i = storage.begin();
+	while (i != storage.end()) {
+		del(i->first); // go through and delete each key
+		i = storage.begin();
+	}
 	tracker = 0.0;
+	storage.clear();
     if (evictor){
     evictor-> clear(); 
     }

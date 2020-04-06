@@ -1,9 +1,8 @@
 // A testfile
 
 #include "cache.hh"
-#include <cassert>
 #include "fifo_evictor.hh"
-#include "evictor.hh"
+#include <cassert>
 #include <iostream>
 #include <cstring>
 
@@ -24,7 +23,8 @@ bool test_set(Cache* test_cache, val_type test_val) {
 	//cache
 	test_cache->set("Chilombo",test_val,2);
 	size_type sz = 0;
-	assert(test_cache->get("Chilombo",sz) == test_val and "test_cache");
+	auto out_val = test_cache->get("Chilombo",sz);
+	assert(*(out_val) == *test_val and "test_set");
 	return true;
 }
 
@@ -32,7 +32,8 @@ bool test_get(Cache* test_cache, val_type test_value){
 	//cache
 	test_cache->set("Aiko",test_value,2);
 	size_type sz = 0;
-	assert(test_cache->get("Aiko",sz) == test_value and "test_get");
+	auto out_val = test_cache->get("Aiko",sz);
+	assert(*out_val == *test_value and "test_get");
 	return true;
 }
 
@@ -49,7 +50,7 @@ bool test_reset(Cache* test_cache, val_type test_val1, val_type test_val2) {
 bool test_no_key(Cache* test_cache) {
 	//cache
 	size_type sz = 0;
-	assert(strcmp(test_cache->get("Taco",sz), "") == 0 and "test_no_key");
+	assert(test_cache->get("Taco",sz) == nullptr and "test_no_key");
 	return true;
 }
 
@@ -58,7 +59,8 @@ bool test_changed_key(Cache* test_cache,val_type test_val1,val_type test_val2) {
 	test_cache->set("Matrix",test_val1,2);
 	test_cache->set("Matrix",test_val2,2);
 	size_type sz = 0;
-	assert(test_cache->get("Matrix",sz) == test_val2 and "test_changed_key");
+	auto out_val = test_cache->get("Matrix",sz);
+	assert(*out_val == *test_val2 and "test_changed_key");
 	return true;
 }
 
@@ -79,7 +81,7 @@ bool test_evictor(Cache* test_cache,val_type test_val1,val_type test_val2,val_ty
 	//this last value should cause us to evict because capacity = 10
 	test_cache->set("Policy",test_val3,7);
 	size_type sz = 0;
-	assert(strcmp(test_cache->get("Macy",sz), "") == 0 and "test_evictor");
+	assert(test_cache->get("Macy",sz) == nullptr and "test_evictor");
 
 	return true;
 }
@@ -98,7 +100,7 @@ bool test_word_exceed(Cache* test_cache,val_type test_val){
 	test_cache->set("Macy",test_val,31);
 	//this value should cause an evict because max_size is 10
 	size_type sz = 0;
-	assert(strcmp(test_cache->get("Macy",sz), "") == 0 and "cache word exceeded");
+	assert(test_cache->get("Macy",sz) == nullptr and "cache word exceeded");
 	return true;
 
 }
@@ -112,13 +114,13 @@ bool test_evictor_twice(Cache* test_cache,val_type test_val1, val_type test_val2
 	//this value should cause another evict because max_size is 10
 
 	size_type sz = 0;
-	assert(strcmp(test_cache->get("Macy",sz), "") == 0 and "test_evictor twice");
-	assert(strcmp(test_cache->get("YessirSki",sz), "") == 0 and "test_evictor twice");
+	assert(test_cache->get("Macy",sz) == nullptr and "test_evictor twice");
+	assert(test_cache->get("YessirSki",sz) == nullptr and "test_evictor twice");
 
 	return true;
 }
 
-bool test_evictor_empty(Cache* test_cache,val_type test_val,FifoEvictor* evictor){
+bool test_evictor_empty(Cache* test_cache,val_type test_val,FIFO* evictor){
 	//evictor
 	test_cache->set("Macy",test_val,3);
 	test_cache -> reset();
@@ -141,30 +143,34 @@ bool test_evictor_with_del(Cache* test_cache,val_type test_val1,val_type test_va
 	test_cache -> del("Robert");
 	test_cache -> set("Otha", test_val3, 8);
 	size_type sz = 0;
-	assert(strcmp(test_cache->get("Robert",sz), "") == 0 and "test evictor after delete used");
+	assert(test_cache->get("Robert",sz) == nullptr and "test evictor after delete used");
 	return true;
 }
 
 bool test_evictor_with_repeat_keys(Cache* test_cache,val_type test_val1,val_type test_val2,val_type test_val3) {
 	//evictor
-	//test evictor with repeat keys, make sure right key gets evicted
+	//test evictor with repeat keys, make sure right key/value pair gets evicted
 	test_cache->set("repeat",test_val1,1);
 	test_cache->set("repeat",test_val2,8);
 	test_cache->set("repeat",test_val3,2);
 	size_type sz = 0;
-	assert(strcmp(test_cache->get("repeat",sz), test_val3) == 0 and "test evictor with repeat keys");
+	auto out_val = test_cache->get("repeat",sz);
+	assert(*out_val == *test_val3 and "test evictor with repeat keys");
 	return true;
+}
+
+std::string& SSS (const char* s)
+{
+    return *(new std::string(s));
 }
 
 
 //Run all test functions
 int main() {
-
-	
 	
 	//init evictor-less cache to test
 	Cache* test_cache = new Cache(10);
-	auto evictor = new FifoEvictor();
+	auto evictor = new FIFO();
 	//init cache w/evictor
 	Cache* test_cache_with_evictor = new Cache(10,0.75,evictor);
 	val_type value1 = "R";

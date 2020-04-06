@@ -1,6 +1,3 @@
-
-
-
 #include <vector>
 #include <algorithm>
 #include "fifo_evictor.hh"

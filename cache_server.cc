@@ -34,9 +34,9 @@ template<
     class Send>
 void
 handle_request(
-    Cache* cache_,
+    std::shared_ptr<Cache> cache_,
     http::request<Body, http::basic_fields<Allocator>>&& req,
-    Send&& send) //Check slack for eitan advice.
+    Send&& send)
 {
     // Returns a bad request response
     auto const bad_request =
@@ -70,8 +70,7 @@ handle_request(
     {
         http::response<http::string_body> res{http::status::internal_server_error, req.version()};
         res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, "text/html");
-        res.keep_alive(req.keep_alive());
+        res.set(http::field::content_type, "application/json");
         res.body() = "An error occurred: '" + std::string(what) + "'";
         res.prepare_payload();
         return res;
@@ -103,98 +102,109 @@ handle_request(
         	return send(server_error(ec.message()));
 
 	// Parse request target
-	std::vector<std::string> req_pair;
-	boost::split(req_pair,req.target(),'/');
-	std::string key = req_pair[0];
-	char cstr[req_pair[1].size() + 1];
-	strcpy(cstr, req_pair[1].c_str());
-	Cache::val_type value = cstr;
-	
+	std::vector<std::string> request_targets;
+	boost::algorithm::split(request_targets,req.target(),boost::is_any_of("/"));
+	if (request_targets.size() != 3) { // check if both key and value are there
+		return send(bad_request("PUT target not found, requires key/value pair '/k/v'\n	"));
+	}
+	auto key = request_targets[1];
+	auto temp = request_targets[2];
+	Cache::val_type value = temp.c_str();
+
 	// Add requested key/value pair to cache
-	Cache::size_type sz;
+	Cache::size_type sz = temp.length();
         cache_->set(key,value,sz); //create or replace k,v pair in cache
-        assert(cache_->get(key, sz) == value); //check that this worked properly
+	assert(*cache_->get(key,sz) == *value); //check that this worked properly
 
 	// Build response and send!
         http::response<http::string_body> res{http::status::ok,req.version()};
-	res.body() = "Key " + key + " and value " + value + " set in cache!";
+	res.body() = "Key '" + key + "' and value '" + value + "' set in cache!\n";
 	return send(std::move(res));
 
     }
 
-		/*
-		//handle get
-		if(req.method() == http::verb::get) {
 
-		}
+  // Handle get
+  if(req.method() == http::verb::get) {
 
-		//handle delete
-		if(req.method() == http::verb::delete_) {
-			http::response<http::file_body> res{
-				std::piecewise_construct,
-				std::make_tuple(std::move(body)),
-				std::make_tuple(http::status::ok, req.version())};
-			res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-			res.set(http::field::content_type, mime_type(path));
-			res.content_length(size);
-			res.keep_alive(req.keep_alive());
-			return send(std::move(res));
-		}
+	// parse request for key
+	std::string key = req.target().to_string().substr(1,req.target().to_string().length());
 
-		//handle head
-		if(req.method() == http::verb::head) {
-			http::response<http::empty_body> res{http::status::ok, req.version()};
-			res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-			res.set(http::field::content_type, mime_type(path));
-			res.content_length(size);
-			res.keep_alive(req.keep_alive());
-			return send(std::move(res));
-		}
+	// try to get key from cache :)
+	Cache::size_type sz = 0;
+	Cache::val_type value = cache_->get(key,sz);
+	if (value) {
+		http::response<http::string_body> res{http::status::ok,req.version()};
+		res.body() = "{\n\t \"key\": \"" + key + "\",\n\t" +
+				"\"value\": \"" + value + "\"\n}\n\n";
+		return send(std::move(res));
+	}
 
-		//handle post
-		if(req.method() == http::verb::post) {
+	// if not in cache, send error
+	else {
+		return send(server_error("Key isn't in cache! :-( \n\n"));
+	}
+  }
 
-		}
 
-		//handle errors
-		//err codes: 3xx/5xx
-		// Returns a server error response
+  // Handle delete
+  if(req.method() == http::verb::delete_) {
+	
+	// Parse key
+	std::string key = req.target().to_string().substr(1,req.target().to_string().length());
+	
+	// Delete from cache if found
+	if (cache_->del(key)){
+	
+	// Build success response and send!
+        http::response<http::string_body> res{http::status::ok,req.version()};
+	res.body() = "Key '" + key + "' and associated value deleted from cache!\n";
+	return send(std::move(res));
+
+	}
+
+	// if key not found, tell the client :(
+	else {
+        http::response<http::string_body> res{http::status::ok,req.version()};
+	res.body() = "Key '" + key + "' not found in cache!\n";
+	return send(std::move(res));
+	}
+  }
+
+
+  //handle head
+  if(req.method() == http::verb::head) {
+	http::response<http::string_body> res{http::status::ok, req.version()};
+	res.insert("Space-Used", cache_->space_used());
+	res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+	res.set(http::field::accept, "application/json");
+	res.set(http::field::content_type, "application/json");
+	return send(std::move(res));
+  }
+
+
+  //handle post
+  if(req.method() == http::verb::post) {
 		
-		// from async server example
-		auto const server_error = [&req](beast::string_view what)
-		{
-			http::response<http::string_body> res{http::status::internal_server_error, req.version()};
-			res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-			res.set(http::field::content_type, "text/html");
-			res.keep_alive(req.keep_alive());
-			res.body() = "An error occurred: '" + std::string(what) + "'";
-			res.prepare_payload();
-			return res;
-		};
+	// if target is "reset", reset cache
+	if (req.target().to_string() == "/reset"){
 
+		cache_->reset(); // Reset cache
 
-		    // Respond to HEAD request
-		    if(req.method() == http::verb::head)
-		    {
-			http::response<http::empty_body> res{http::status::ok, req.version()};
-			res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-			res.set(http::field::content_type, mime_type(path));
-			res.content_length(size);
-			res.keep_alive(req.keep_alive());
-			return send(std::move(res));
-		    }
+		// Build success response and send!
+		http::response<http::string_body> res{http::status::ok,req.version()};
+		res.body() = "Cache reset!\n";
+		return send(std::move(res));
 
-		    // Respond to GET request
-		    http::response<http::file_body> res{
-			std::piecewise_construct,
-			std::make_tuple(std::move(body)),
-			std::make_tuple(http::status::ok, req.version())};
-		    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-		    res.set(http::field::content_type, mime_type(path));
-		    res.content_length(size);
-		    res.keep_alive(req.keep_alive());
-		    return send(std::move(res));
-		*/
+	}
+
+	// if any other target, we don't do squat >:)
+	else {
+	
+		return send(server_error("NOT FOUND"));
+	}
+  }
+
 } // end of handle_request()
 
 // Report a failure
@@ -250,12 +260,12 @@ class session : public std::enable_shared_from_this<session>
     http::request<http::string_body> req_;
     std::shared_ptr<void> res_;
     send_lambda lambda_;
-    Cache* cache_;
+    std::shared_ptr<Cache> cache_;
 
 public:
     // Take ownership of the stream
     session(
-	Cache* cache,
+	std::shared_ptr<Cache> cache,
         tcp::socket&& socket)
         : stream_(std::move(socket)),
 	lambda_(*this),
@@ -302,11 +312,13 @@ public:
         boost::ignore_unused(bytes_transferred);
 
         // This means they closed the connection
-        if(ec == http::error::end_of_stream)
-            return do_close();
+        if(ec == http::error::end_of_stream){
+	   return do_close();
+	}
 
-        if(ec)
+        if(ec) {
             return fail(ec, "read");
+	}
 
         // Send the response
         handle_request(cache_, std::move(req_), lambda_);
@@ -353,11 +365,11 @@ class listener : public std::enable_shared_from_this<listener>
 {
     net::io_context& ioc_;
     tcp::acceptor acceptor_;
-    Cache* cache_;
+    std::shared_ptr<Cache> cache_;
 
 public:
     listener(
-	Cache* cache,
+	std::shared_ptr<Cache> cache,
         net::io_context& ioc,
         tcp::endpoint endpoint)
         : ioc_(ioc)
@@ -490,7 +502,7 @@ int main(int argc, const char* argv[]){
 	}
 
 	// Set up cache
-	Cache* cache = new Cache(maxmem);
+	std::shared_ptr<Cache> cache(new Cache(maxmem));
 	
 	//// SET UP SERVER
         beast::error_code ec; // error code for parsing ip
