@@ -3,12 +3,18 @@ Ian Jackson, Arthur Lawson
 
 ## Goal:  
 
+Part 0:
+
+Some of the bugs in our previous code we had to fix were making the cache deep copy values into a shared ptr, changing the evictor to adhere to the original "no hh alteration" rules, and changing how our evictor handles values that are too large. For some of these, we referenced the repos of the people's code we tested for HW3.
+
 ## Part 1
 
+For our server we used curl in the linux terminal to test out each request. We followed the advice of Eitan and focused on the PUT request and the rest kind of fell in place from there. The get requestcaused a but of an issue because our values were not deep copied in our original Cache_lib. Once we fixed that, everything else was pretty straightforward.
 
 ## Part 2
 
-We got around the memory ownership issue with Cache::get() by deep copying the value into a sharedptr ???_----
+network test
+
 
 ## Bugs, Leaks, and Warnings!
 
