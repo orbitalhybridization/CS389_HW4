@@ -15,10 +15,14 @@
 #include <boost/asio/connect.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/beast/core/basic_stream.hpp>
+#include <sstream>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
 
 namespace beast = boost::beast;     // from <boost/beast.hpp>
 namespace http = beast::http;       // from <boost/beast/http.hpp>
 namespace net = boost::asio;        // from <boost/asio.hpp>
+namespace pt = boost::property_tree; // from <boost/property_tree.hpp>
 using tcp = net::ip::tcp;           // from <boost/asio/ip/tcp.hpp>
 
 class Cache::Impl
@@ -29,7 +33,7 @@ public:
     // Set up member vars
     std::string host_ip_;
     std::string external_port_;
-    int version = 10;
+    int version = 11;
     tcp::resolver::results_type results;
     net::io_context ioc; // The io_context is required for all I/O
     // These objects perform our I/O
@@ -39,6 +43,7 @@ public:
     ~Impl() {
         beast::error_code ec;
         stream_->socket().shutdown(tcp::socket::shutdown_both, ec); //close stream
+	delete stream_;
     }    
 
     // Cache client constructor
@@ -78,7 +83,7 @@ public:
 
     void set(key_type key, val_type val, size_type){
 
-
+		stream_->connect(results);
 		// Set up an HTTP PUT request message
 		auto target = "/" + key + "/" + val; // build target 
 		http::request<http::string_body> req{http::verb::put,target,version};
@@ -112,11 +117,124 @@ public:
      // Sets the actual size of the returned value (in bytes) in val_size.
      val_type get(key_type key, size_type&) {
 
+		stream_->connect(results);
 		// Set up an HTTP GET request message
-		auto target = key; // build target
+		auto target = "/" + key; // build target
 		http::request<http::string_body> req{http::verb::get, target, version};
 		req.set(http::field::host, host_ip_);
 		req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+
+		// Send the HTTP request to the remote host
+		http::write(*stream_, req);
+
+		// This buffer is used for reading and must be persisted
+		beast::flat_buffer buffer;
+
+		// Declare a container to hold the response
+		http::response<http::string_body> res;
+
+		// Receive the HTTP response
+		http::read(*stream_, buffer, res);
+
+		// Write the message to standard out, this should be the value of key
+		// and the size of the value
+		std::cout << res << std::endl;
+		
+		// if key found, return
+		if (res.result() == http::status::ok) {
+
+			// read string body as json and return
+			std::stringstream ss;		
+			ss << res.body();
+			pt::ptree pt;
+			read_json(ss, pt);
+			auto temp = pt.get<std::string>("value");
+			Cache::val_type value = temp.c_str();
+
+			return value;
+		}
+	
+		else {
+			return nullptr;
+		}
+
+    }
+
+
+     // Delete an object from the cache, if it's still there
+     bool del(key_type key) {
+
+		stream_->connect(results);
+		// Set up an HTTP GET request message
+		auto target = "/" + key; // build target
+		http::request<http::string_body> req{http::verb::delete_, target, version};
+		req.set(http::field::host, host_ip_);
+		req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+
+		// Send the HTTP request to the remote host
+		http::write(*stream_, req);
+
+		// This buffer is used for reading and must be persisted
+		beast::flat_buffer buffer;
+
+		// Declare a container to hold the response
+		http::response<http::string_body> res;
+
+		// Receive the HTTP response
+		http::read(*stream_, buffer, res);
+
+		// Write the message to standard out, this should be the value of key
+		// and the size of the value
+		std::cout << res << std::endl;
+		
+		// if the server found the key, then return true
+		if (res.result() == http::status::ok){return true;}
+
+		// if not, return false
+		else{return false;}
+     }
+
+     // Compute the total amount of memory used up by all cache values (not keys)
+     size_type space_used() const {
+
+		stream_->connect(results);
+		// Set up an HTTP head request message
+		auto target = "Makessense";
+		http::request<http::empty_body> req{http::verb::head, target, version};
+		req.set(http::field::host, host_ip_);
+		req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+		
+		// Send the HTTP request to the remote host
+		http::write(*stream_, req);
+
+		// This buffer is used for reading and must be persisted
+		beast::flat_buffer buffer;
+
+		// Declare a container to hold the response
+		http::response<http::empty_body> res;
+
+		// Receive the HTTP response
+		http::read(*stream_, buffer, res);
+
+		// Write the message to standard out, this should be the value of key
+		// and the size of the value
+		std::cout << res << std::endl;
+
+		//std::cout << "I THINK I CAN " + res.base() << std::endl;
+		return 0;
+
+     }
+
+     // Delete all data from the cache
+     void reset(){
+
+		stream_->connect(results);
+		// Set up an HTTP POST request message
+		auto target = "/reset";
+		http::request<http::string_body> req{http::verb::post	, target, version};
+		req.set(http::field::host, host_ip_);
+		req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+
 
 		// Send the HTTP request to the remote host
 		http::write(*stream_, req);
@@ -134,121 +252,8 @@ public:
 		// and the size of the value
 		std::cout << res << std::endl;
 
-		// cast res as val_type because it comes in as a string
-		std::string string = res.body();
-
-		return res;
-
-    }
-
-/*
-     // Delete an object from the cache, if it's still there
-     bool  del(key_type key) {
-
-
-		// Set up an HTTP DELETE_ request message
-		http::request<http::string_body> req{http::verb::delete_, target, version};
-		req.set(http::field::host, host);
-		req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-
-		// Send the HTTP request to the remote host
-		http::write(stream, req);
-
-		// This buffer is used for reading and must be persisted
-		beast::flat_buffer buffer;
-
-		// Declare a container to hold the response
-		http::response<http::dynamic_body> res;
-
-		// Receive the HTTP response
-		http::read(stream, buffer, res);
-
-		// Write the message to standard out, this should be the value of key
-		// and the size of the value
-		std::cout << res << std::endl;
-
-		// Gracefully close the socket
-		//beast::error_code ec;
-		//stream.socket().shutdown(tcp::socket::shutdown_both, ec);
-
-		// If we get here then the connection is closed gracefully
-	    	//return EXIT_SUCCESS;
-
-
      }
 
-     // Compute the total amount of memory used up by all cache values (not keys)
-     size_type space_used() const {
-        // Set up an HTTP head request message
-
-
-        //might wanna double check This                                   ~Arthur
-        http::request<http::string_body> req{http::verb::head, target, version};
-        req.set(http::field::host, host);
-        req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-
-        // Send the HTTP request to the remote host
-        http::write(stream, req);
-
-        // This buffer is used for reading and must be persisted
-        beast::flat_buffer buffer;
-
-        // Declare a container to hold the response
-        http::response<http::dynamic_body> res;
-
-        // Receive the HTTP response
-        http::read(stream, buffer, res);
-
-        // Write the message to standard out, this should be the value of key
-        // and the size of the value
-        std::cout << res << std::endl;
-
-        // Gracefully close the socket
-        //beast::error_code ec;
-        //stream.socket().shutdown(tcp::socket::shutdown_both, ec);
-
-        // If we get here then the connection is closed gracefully
-            //return EXIT_SUCCESS;
-
-
-
-     }
-
-     // Delete all data from the cache
-     void reset(){
-
-
-		// Set up an HTTP RESET request message
-        //shouldn't http verb be post for reset? Instructions said that post should be only for reset ~ Arthur
-		http::request<http::string_body> req{http::verb::put, target, version};
-		req.set(http::field::host, host);
-		req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-
-		// Send the HTTP request to the remote host
-		http::write(stream, req);
-
-		// This buffer is used for reading and must be persisted
-		beast::flat_buffer buffer;
-
-		// Declare a container to hold the response
-		http::response<http::dynamic_body> res;
-
-		// Receive the HTTP response
-		http::read(stream, buffer, res);
-
-		// Write the message to standard out, this should be the value of key
-		// and the size of the value
-		std::cout << res << std::endl;
-
-		// Gracefully close the socket
-		//beast::error_code ec;
-		//stream.socket().shutdown(tcp::socket::shutdown_both, ec);
-
-		// If we get here then the connection is closed gracefully
-	    	//return EXIT_SUCCESS;
-
-     }
-*/
  private:     
     std::unordered_map<key_type, std::pair<val_type,size_type>,hash_func> storage; //stores value pointer and size of value
 
@@ -268,12 +273,13 @@ void Cache::set(key_type key,
 {
     pImpl_->set(key,val,size);
 }
-/*
+
 Cache::val_type Cache::get(key_type key, 
         Cache::size_type& val_size) const
 {
     return pImpl_->get(key,val_size);
 }
+
 
 bool Cache::del(key_type key)
 {
@@ -289,4 +295,3 @@ void Cache::reset()
 {
     pImpl_->reset();
 }
-*/

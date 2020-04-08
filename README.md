@@ -1,36 +1,42 @@
 # HW4: Let's network
 Ian Jackson, Arthur Lawson
 
-## Goal:  
+## Goal:
 
-Part 0:
+Modify cache code to allow access from multiple clients over a network, which implements a RESTful API.
 
-Some of the bugs in our previous code we had to fix were making the cache deep copy values into a shared ptr, changing the evictor to adhere to the original "no hh alteration" rules, and changing how our evictor handles values that are too large. For some of these, we referenced the repos of the people's code we tested for HW3.
+## Part 0: Preparation
 
-## Part 1
+Some of the bugs in our previous code we had to fix were making the cache deep copy values into a shared ptr, changing the evictor to adhere to the original "no hh alteration" rules, and changing how our evictor handles values that are too large. For some of these, we referenced the repos of the people's code we tested for HW3 (see contributions/sources).
 
-For our server we used curl in the linux terminal to test out each request. We followed the advice of Eitan and focused on the PUT request and the rest kind of fell in place from there. The get requestcaused a but of an issue because our values were not deep copied in our original Cache_lib. Once we fixed that, everything else was pretty straightforward.
+## Part 1: TCP Server
 
-## Part 2
+For our server we used Beast Program Options to parse the command line positional args, and Boost Beast (courtesy of Vinnie Falco) as the basis for the server. 
+We used curl in the linux terminal to test out each request.
 
-network test
+Our design began with implementing PUT requests, and using that as a template for the rest.
 
+## Part 2: TCP Client
+
+Boost Beast was also used as the basis for the client.
+
+The GET request caused a bit of an issue because our values were not deep copied in our original cache_lib (the pointer ownership that we were told to watch out for in the homework description). Once we fixed that by creating a deep copy of the value pointer, everything else was pretty straightforward.
 
 ## Bugs, Leaks, and Warnings!
 
-Three memory leak blocks
+According to Valgrind, we have no blocks definitely lost, but some are still accessible.
+The memory leak that seems to be causing the final aborted core dump is related to the "munmap_chunk(): invalid pointer" error. Looking into this before HW5 is due would be helpful, but all of the tests pass so we're content with that at this point.
 
 ## Contributions / Sources
 
-Cache_Lib Code Adapted from Hannah Hellerstein & David Riso's Repo:
+Cache_Lib Code Adapted from Hannah Hellerstein & David Riso's Repo, which we tested in HW3:
 https://github.com/orbitalhybridization/CS389_HW3/blob/master/Systems_HW2-master/cache_lib.cc
 
 Beast Examples:
 Async Server: https://www.boost.org/doc/libs/develop/libs/beast/example/http/server/async/http_server_async.cpp
 Sync Client: https://www.boost.org/doc/libs/develop/libs/beast/example/http/client/sync/http_client_sync.cpp
 
-
-TODO: 1) change del and reset(?) methods from old_evictor.hh
-	6) JSON BODY TYPE
-	7) error conditions in test file for client (bad key, garbage requests, etc)
+JSON Parsing:
+https://stackoverflow.com/questions/21537637/c-boost-parse-dynamically-generated-json-string-not-a-file
+https://stackoverflow.com/questions/17799229/boost-asio-post-http-request-headers-and-body#29564382
 

@@ -17,12 +17,16 @@
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/value_semantic.hpp>
 #include <boost/algorithm/string.hpp>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
+#include <sstream>
 
 // Use boost to parse command line and beast for server
 namespace parse_cmd = boost::program_options;
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
 namespace net = boost::asio;            // from <boost/asio.hpp>
+namespace pt = boost::property_tree;	// from <boost/property_tree.hpp>
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
 // This function produces an HTTP response for the given
@@ -38,6 +42,7 @@ handle_request(
     http::request<Body, http::basic_fields<Allocator>>&& req,
     Send&& send)
 {
+
     // Returns a bad request response
     auto const bad_request =
     [&req](beast::string_view why)
@@ -51,19 +56,6 @@ handle_request(
         return res;
     };
 
-    // Returns a not found response
-    auto const not_found =
-    [&req](beast::string_view target)
-    {
-        http::response<http::string_body> res{http::status::not_found, req.version()};
-        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, "text/html");
-        res.keep_alive(req.keep_alive());
-        res.body() = "The resource '" + std::string(target) + "' was not found.";
-        res.prepare_payload();
-        return res;
-    };
-
     // Returns a server error response
     auto const server_error =
     [&req](beast::string_view what)
@@ -71,6 +63,7 @@ handle_request(
         http::response<http::string_body> res{http::status::internal_server_error, req.version()};
         res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
         res.set(http::field::content_type, "application/json");
+        res.keep_alive(req.keep_alive());
         res.body() = "An error occurred: '" + std::string(what) + "'";
         res.prepare_payload();
         return res;
@@ -95,7 +88,9 @@ handle_request(
 
 	// Handle a put request without key/value pair
 	if (req.target().empty()) {
-		return send(bad_request("PUT target not found, requires key/value pair '/k/v'"));
+		http::response<http::string_body> res{http::status::bad_request,req.version()};
+		res.body() = "PUT target not found, requires key/value pair '/k/v'\n";
+		return send(std::move(res));
 	}
 
     	if(ec) // handle error >_<
@@ -105,7 +100,9 @@ handle_request(
 	std::vector<std::string> request_targets;
 	boost::algorithm::split(request_targets,req.target(),boost::is_any_of("/"));
 	if (request_targets.size() != 3) { // check if both key and value are there
-		return send(bad_request("PUT target not found, requires key/value pair '/k/v'\n	"));
+		http::response<http::string_body> res{http::status::bad_request,req.version()};
+		res.body() = "PUT target not found, requires key/value pair '/k/v'\n";
+		return send(std::move(res));
 	}
 	auto key = request_targets[1];
 	auto temp = request_targets[2];
@@ -119,6 +116,7 @@ handle_request(
 	// Build response and send!
         http::response<http::string_body> res{http::status::ok,req.version()};
 	res.body() = "Key '" + key + "' and value '" + value + "' set in cache!\n";
+        res.keep_alive(req.keep_alive());
 	return send(std::move(res));
 
     }
@@ -134,15 +132,27 @@ handle_request(
 	Cache::size_type sz = 0;
 	Cache::val_type value = cache_->get(key,sz);
 	if (value) {
+
+		//build json
+		pt::ptree root;
+		root.put("key",key);
+		root.put("value",value);
+		// read json into string stream for body
+		std::ostringstream buf; 
+		write_json(buf, root, false);
+		std::string json = buf.str();
 		http::response<http::string_body> res{http::status::ok,req.version()};
-		res.body() = "{\n\t \"key\": \"" + key + "\",\n\t" +
-				"\"value\": \"" + value + "\"\n}\n\n";
+		res.body() = json;
+        	res.keep_alive(req.keep_alive());
 		return send(std::move(res));
 	}
 
 	// if not in cache, send error
 	else {
-		return send(server_error("Key isn't in cache! :-( \n\n"));
+		http::response<http::string_body> res{http::status::not_found,req.version()};
+		res.body() = "Key isn't in cache! :-(";
+        	res.keep_alive(req.keep_alive());
+		return send(std::move(res));
 	}
   }
 
@@ -159,14 +169,16 @@ handle_request(
 	// Build success response and send!
         http::response<http::string_body> res{http::status::ok,req.version()};
 	res.body() = "Key '" + key + "' and associated value deleted from cache!\n";
+        res.keep_alive(req.keep_alive());
 	return send(std::move(res));
-
+	
 	}
 
 	// if key not found, tell the client :(
 	else {
-        http::response<http::string_body> res{http::status::ok,req.version()};
+        http::response<http::string_body> res{http::status::not_found,req.version()};
 	res.body() = "Key '" + key + "' not found in cache!\n";
+        res.keep_alive(req.keep_alive());
 	return send(std::move(res));
 	}
   }
@@ -174,11 +186,11 @@ handle_request(
 
   //handle head
   if(req.method() == http::verb::head) {
-	http::response<http::string_body> res{http::status::ok, req.version()};
+	http::response<http::empty_body> res{http::status::ok, req.version()};
 	res.insert("Space-Used", cache_->space_used());
-	res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
 	res.set(http::field::accept, "application/json");
 	res.set(http::field::content_type, "application/json");
+    res.keep_alive(req.keep_alive());
 	return send(std::move(res));
   }
 
@@ -194,6 +206,7 @@ handle_request(
 		// Build success response and send!
 		http::response<http::string_body> res{http::status::ok,req.version()};
 		res.body() = "Cache reset!\n";
+        	res.keep_alive(req.keep_alive());
 		return send(std::move(res));
 
 	}
@@ -201,7 +214,10 @@ handle_request(
 	// if any other target, we don't do squat >:)
 	else {
 	
-		return send(server_error("NOT FOUND"));
+		http::response<http::string_body> res{http::status::bad_request,req.version()};
+		res.body() = "Target for POST request must be /reset!\n";
+        	res.keep_alive(req.keep_alive());
+		return send(std::move(res));
 	}
   }
 
@@ -302,7 +318,9 @@ public:
             beast::bind_front_handler(
                 &session::on_read,
                 shared_from_this()));
+
     }
+
 
     void
     on_read(
@@ -314,15 +332,16 @@ public:
         // This means they closed the connection
         if(ec == http::error::end_of_stream){
 	   return do_close();
-	}
+		}
 
         if(ec) {
             return fail(ec, "read");
-	}
+		}
 
         // Send the response
-        handle_request(cache_, std::move(req_), lambda_);
-    }
+		handle_request(cache_, std::move(req_), lambda_);
+
+	}
 
     void
     on_write(

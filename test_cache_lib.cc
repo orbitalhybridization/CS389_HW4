@@ -159,11 +159,6 @@ bool test_evictor_with_repeat_keys(Cache* test_cache,val_type test_val1,val_type
 	return true;
 }
 
-std::string& SSS (const char* s)
-{
-    return *(new std::string(s));
-}
-
 
 //Run all test functions
 int main() {
