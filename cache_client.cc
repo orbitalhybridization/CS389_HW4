@@ -18,6 +18,8 @@
 #include <sstream>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
+#include <boost/utility/string_ref.hpp> 
+#include <boost/spirit/include/qi.hpp>
 
 namespace beast = boost::beast;     // from <boost/beast.hpp>
 namespace http = beast::http;       // from <boost/beast/http.hpp>
@@ -183,8 +185,7 @@ public:
 		// Receive the HTTP response
 		http::read(*stream_, buffer, res);
 
-		// Write the message to standard out, this should be the value of key
-		// and the size of the value
+		// Write the message to standard out
 		std::cout << res << std::endl;
 		
 		// if the server found the key, then return true
@@ -216,12 +217,15 @@ public:
 		// Receive the HTTP response
 		http::read(*stream_, buffer, res);
 
-		// Write the message to standard out, this should be the value of key
-		// and the size of the value
+		// Write the message to standard out
 		std::cout << res << std::endl;
 
-		//std::cout << "I THINK I CAN " + res.base() << std::endl;
-		return 0;
+		// Parse Space_used field of header and return!
+		auto res_string = res.base().at("Space-Used");
+		int space_used;
+		boost::spirit::qi::parse(std::cbegin(res_string), std::cend(res_string), boost::spirit::qi::int_, space_used);
+
+		return space_used;
 
      }
 

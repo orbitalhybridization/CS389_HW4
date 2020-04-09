@@ -63,9 +63,9 @@ bool test_del_no_key(Cache* test_cache) {
 bool test_space_used(Cache* test_cache,val_type test_val1,val_type test_val2,val_type test_val3) {
 	std::cout << "\n-----------------------\nRunning test_space_used function..." << std::endl;
 	test_cache->set("Toe",test_val1,1);
-	test_cache->set("Uhh",test_val2,4);
+	test_cache->set("Uhh",test_val2,1);
 	test_cache->set("Jesus",test_val3,1);
-	assert(test_cache->space_used() == 0 and "test_spaced_used");
+	assert(test_cache->space_used() == 3 and "test_spaced_used");
 	return true;
 }
 

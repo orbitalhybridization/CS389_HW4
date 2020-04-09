@@ -27,6 +27,8 @@ The GET request caused a bit of an issue because our values were not deep copied
 According to Valgrind, we have no blocks definitely lost, but some are still accessible.
 The memory leak that seems to be causing the final aborted core dump is related to the "munmap_chunk(): invalid pointer" error. Looking into this before HW5 is due would be helpful, but all of the tests pass so we're content with that at this point.
 
+This is possibly what leads to the test file sometimes returning too early (at test_set or test_get) due to the value pointer being corrupted. This can be fixed by running the test script again. Sorry about this! This will be fixed in the next version (HW5).
+
 ## Contributions / Sources
 
 Cache_Lib Code Adapted from Hannah Hellerstein & David Riso's Repo, which we tested in HW3:
